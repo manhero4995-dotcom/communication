@@ -248,6 +248,30 @@ a { color: #2E75B6; text-decoration: none; }
   }
   .copy-btn:hover { color: var(--accent2); border-color: var(--accent2); }
 
+  /* MCQ answers: hidden by default, reveal per question or all at once. */
+  .mcq-hint {
+    margin: 14px 0 22px; padding: 12px 15px;
+    background: var(--soft); border: 1px dashed var(--line); border-radius: 10px;
+    color: var(--muted); font-size: 13.5px;
+  }
+  .mcq-hint strong { color: var(--accent2); }
+  .mcq-answer {
+    margin: 8px 0 0; padding: 12px 15px;
+    background: var(--soft); border-left: 3px solid var(--accent2);
+    border-radius: 0 10px 10px 0;
+  }
+  .mcq-answer strong:first-child { color: var(--accent2); }
+  .mcq-answer.is-hidden { display: none; }
+  .answer-toggle {
+    margin: 6px 0 0; padding: 6px 11px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--muted);
+    font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer;
+    transition: .15s ease;
+  }
+  .answer-toggle:hover { color: var(--accent2); border-color: var(--accent2); background: var(--soft); }
+  .answer-toggle:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+
   blockquote {
     margin: 18px 0; padding: 14px 18px; color: var(--text);
     background: #fff8e5;
@@ -303,7 +327,7 @@ a { color: #2E75B6; text-decoration: none; }
 }
 
 @media print {
-  .topbar, .sidebar, .progress, .backtop, .overlay, .copy-btn, #tocSearch { display: none !important; }
+  .topbar, .sidebar, .progress, .backtop, .overlay, .copy-btn, #tocSearch, .answer-toggle, .mcq-hint { display: none !important; }
   .content { margin: 0 !important; padding: 0 !important; max-width: none !important; }
   .table-wrap { overflow: visible !important; }
   .table-wrap table { min-width: 0 !important; }
@@ -318,6 +342,7 @@ a { color: #2E75B6; text-decoration: none; }
   <button class="icon-btn" id="menuBtn" aria-label="Toggle contents">☰</button>
   <a class="brand" href="#top">Digital Communications <span>Study Pack</span></a>
   <div class="top-actions">
+    <button class="pill" id="answersBtn" type="button" title="Show all MCQ answers">👁 <span>Show answers</span></button>
     <button class="pill" id="themeBtn" type="button">🌙 <span>Dark</span></button>
     <button class="pill" id="printBtn" type="button">🖨 <span>Print / PDF</span></button>
   </div>
@@ -378,7 +403,11 @@ a { color: #2E75B6; text-decoration: none; }
 </tr>
 <tr>
 <td><code>Digital_Communications_Study_Pack.html</code></td>
-<td>Self-contained HTML version for browser reading</td>
+<td>Self-contained HTML version for browser reading (search, dark mode, contents sidebar, print button)</td>
+</tr>
+<tr>
+<td><code>deploy/index.html</code></td>
+<td>Ready-to-upload copy of the HTML for Netlify Drop / Cloudflare Pages / GitHub Pages</td>
 </tr>
 <tr>
 <td><code>figures/</code></td>
@@ -3276,6 +3305,7 @@ D. 2.5 MHz  </p>
   const menuBtn = document.getElementById('menuBtn');
   const themeBtn = document.getElementById('themeBtn');
   const printBtn = document.getElementById('printBtn');
+  const answersBtn = document.getElementById('answersBtn');
 
   // Wrap tables so wide tables scroll on mobile.
   content.querySelectorAll('table').forEach(function (table) {
@@ -3405,6 +3435,72 @@ D. 2.5 MHz  </p>
   });
 
   printBtn.addEventListener('click', function () { window.print(); });
+
+  // MCQ answers: hidden by default, with per-question reveal.
+  const mcqSection = Array.from(content.querySelectorAll('section.doc')).find(function (s) {
+    const h = s.querySelector('h1');
+    return h && h.textContent.trim().indexOf('MCQ Bank') === 0;
+  });
+  const mcqAnswers = [];
+  const answerButtons = [];
+
+  if (mcqSection) {
+    const mcqH1 = mcqSection.querySelector('h1');
+    const hint = document.createElement('div');
+    hint.className = 'mcq-hint';
+    hint.innerHTML = 'Answers are hidden by default. Tap <strong>Show answer</strong> under a question — or use the answers button in the top bar to show/hide all solutions.';
+    mcqH1.insertAdjacentElement('afterend', hint);
+
+    Array.from(mcqSection.querySelectorAll('p')).forEach(function (p) {
+      if (!/^Answer:\s*[A-D]/.test(p.textContent.trim())) return;
+      const id = 'mcq-answer-' + (mcqAnswers.length + 1);
+      p.classList.add('mcq-answer', 'is-hidden');
+      p.id = id;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'answer-toggle';
+      btn.textContent = 'Show answer';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-controls', id);
+      p.insertAdjacentElement('afterend', btn);
+      btn.addEventListener('click', function () {
+        const hidden = p.classList.toggle('is-hidden');
+        btn.textContent = hidden ? 'Show answer' : 'Hide answer';
+        btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+        syncAnswersButton();
+      });
+      mcqAnswers.push(p);
+      answerButtons.push(btn);
+    });
+  }
+
+  function syncAnswersButton() {
+    if (!answersBtn || !mcqAnswers.length) return;
+    const allShown = mcqAnswers.every(function (p) { return !p.classList.contains('is-hidden'); });
+    answersBtn.innerHTML = allShown ? '🙈 <span>Hide answers</span>' : '👁 <span>Show answers</span>';
+    answersBtn.title = allShown ? 'Hide all MCQ answers' : 'Show all MCQ answers';
+    answersBtn.setAttribute('aria-pressed', allShown ? 'true' : 'false');
+  }
+
+  function setAllAnswers(show) {
+    mcqAnswers.forEach(function (p) { p.classList.toggle('is-hidden', !show); });
+    answerButtons.forEach(function (b) {
+      b.textContent = show ? 'Hide answer' : 'Show answer';
+      b.setAttribute('aria-expanded', show ? 'true' : 'false');
+    });
+    syncAnswersButton();
+    localStorage.setItem('dc-answers', show ? 'shown' : 'hidden');
+  }
+
+  if (answersBtn && mcqAnswers.length) {
+    setAllAnswers(localStorage.getItem('dc-answers') === 'shown');
+    answersBtn.addEventListener('click', function () {
+      const allShown = mcqAnswers.every(function (p) { return !p.classList.contains('is-hidden'); });
+      setAllAnswers(!allShown);
+    });
+  } else if (answersBtn) {
+    answersBtn.style.display = 'none';
+  }
 
   // Copy buttons for code blocks.
   content.querySelectorAll('pre').forEach(function (pre) {
